@@ -2,7 +2,7 @@
 
 This project includes:
 - FastAPI backend (`main.py`)
-- Streamlit frontend (`streamlit_app.py`)
+- Next.js frontend (`frontend/`)
 - Supabase Postgres for chat/document metadata and vector embeddings (`pgvector`)
 
 ## 1. Environment Variables
@@ -19,10 +19,12 @@ Required values:
 
 Optional values:
 - `TAVILY_API_KEY`
-- `API_BASE_URL`
+- `FASTAPI_BASE_URL` (Next.js server routes -> FastAPI)
 - `CORS_ORIGINS`
 
 ## 2. Install Dependencies
+
+Python dependencies:
 
 ```bash
 uv sync
@@ -34,6 +36,13 @@ or
 pip install -e .
 ```
 
+Next.js dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
 ## 3. Run Locally
 
 Start FastAPI:
@@ -42,23 +51,36 @@ Start FastAPI:
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Start Streamlit:
+Start Next.js frontend:
 
 ```bash
-streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+cd frontend
+npm run dev
 ```
 
-By default the UI points to `http://localhost:8000`. Override with `API_BASE_URL`.
+URLs:
+- FastAPI: `http://localhost:8000`
+- Next.js: `http://localhost:3000`
 
-## 4. Deploy Externally
+## 4. API Surface Used by the Next Frontend
+
+Next.js proxies browser calls to FastAPI via route handlers under `frontend/app/api/*`:
+- `POST /api/chat` -> `POST /chat`
+- `POST /api/chat/stream` -> `POST /chat/stream` (SSE passthrough)
+- `GET /api/chat-sessions` -> `GET /chat-sessions`
+- `GET /api/chat-sessions/:id` -> `GET /chat-sessions/:id`
+- `GET /api/list-docs` -> `GET /list-docs`
+- `POST /api/upload-doc` -> `POST /upload-doc`
+- `POST /api/delete-doc` -> `POST /delete-doc`
+
+## 5. Deploy Externally (Render-Friendly)
 
 Recommended architecture:
-- Deploy FastAPI as one service
-- Deploy Streamlit as another service
-- Set `API_BASE_URL` in Streamlit to your FastAPI public URL
-- Set `CORS_ORIGINS` in FastAPI to your Streamlit URL
+- Deploy FastAPI and frontend as separate services
+- Set `FASTAPI_BASE_URL` for the frontend service to your FastAPI internal/public URL
+- Keep `CORS_ORIGINS` set for any browser-direct clients (for proxy-only frontend traffic, CORS pressure is lower)
 
-## 5. Supabase and Vector Storage
+## 6. Supabase and Vector Storage
 
 Supabase Postgres supports vectors through the `pgvector` extension.
 
@@ -70,9 +92,9 @@ On startup, the app ensures:
 - `vector` extension exists
 - vector chunk table and indexes exist
 
-## 6. Run with Docker
+## 7. Run with Docker
 
-Build and run both services:
+Build and run:
 
 ```bash
 docker compose up --build
@@ -80,14 +102,25 @@ docker compose up --build
 
 Services:
 - FastAPI: `http://localhost:8000`
-- Streamlit: `http://localhost:8501`
+- Next.js frontend: `http://localhost:3000`
 
-Notes:
-- `docker-compose.yml` loads `.env` for both services
-- Streamlit is configured to call API at `http://api:8000` inside Docker network
-- Keep `CORS_ORIGINS` aligned with your deployed UI domain
+## 8. Frontend Tests
 
-## 7. Health Check
+Run frontend unit tests:
+
+```bash
+cd frontend
+npm run test
+```
+
+Current test coverage includes:
+- SSE event stream parsing (`token`, `done`, `error`)
+- API client error normalization and backend error propagation
+
+Manual parity and release validation checklist:
+- `frontend/docs/parity-checklist.md`
+
+## 9. Health Check
 
 FastAPI exposes:
 

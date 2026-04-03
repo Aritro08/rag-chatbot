@@ -9,9 +9,7 @@ COPY pyproject.toml README.md /app/
 COPY graph /app/graph
 COPY models /app/models
 COPY utils /app/utils
-COPY styles /app/styles
 COPY main.py /app/main.py
-COPY streamlit_app.py /app/streamlit_app.py
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .

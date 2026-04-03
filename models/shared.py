@@ -9,6 +9,7 @@ class AgentState(TypedDict, total=False):
     retriever_mode: Literal["hybrid", "vector"]
     rag: str
     web: str
+    model_name: str
 
 class RouteDecision(BaseModel):
     route: Literal["rag", "answer", "end"]
@@ -26,4 +27,3 @@ class RetrieverChoice(BaseModel):
 router_llm = ChatOpenAI(model='gpt-4o-mini').with_structured_output(RouteDecision)
 judge_llm = ChatOpenAI(model='gpt-4o-mini').with_structured_output(RagJudge)
 retriever_selector_llm = ChatOpenAI(model='gpt-4o-mini').with_structured_output(RetrieverChoice)
-answer_llm = ChatOpenAI(model='gpt-4o-mini', temperature=0.5)

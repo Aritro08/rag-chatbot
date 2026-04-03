@@ -1,7 +1,8 @@
 from typing import Literal
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
-from models.shared import AgentState, router_llm, judge_llm, answer_llm, retriever_selector_llm, RouteDecision, RagJudge, RetrieverChoice
+from langchain_openai import ChatOpenAI
+from models.shared import AgentState, router_llm, judge_llm, retriever_selector_llm, RouteDecision, RagJudge, RetrieverChoice
 from graph.tools import web_search_tool, get_hybrid_retriever, get_vector_retriever
 
 def retriever_selector_node(state: AgentState) -> AgentState:
@@ -118,7 +119,9 @@ def answer_node(state: AgentState) -> AgentState:
     """
 
     messages = state['messages'] + [HumanMessage(content=prompt)]
-    answer = answer_llm.invoke(messages).content
+    model_name = state.get("model_name") or "gpt-4o-mini"
+    llm = ChatOpenAI(model=model_name, temperature=0.5)
+    answer = llm.invoke(messages).content
 
     return {
         **state,
