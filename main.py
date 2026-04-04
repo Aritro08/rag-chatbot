@@ -1,7 +1,9 @@
 import os
 import tempfile
+import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from langchain_core.messages import HumanMessage, AIMessage
 import logging
@@ -12,6 +14,12 @@ from utils.utils import get_or_create_session_id, history_to_messages, append_to
 from utils.db_utils import get_chat_history, insert_chat_history, get_all_documents, insert_document_record, delete_document, create_chat_history, create_documents_store, get_all_sessions, get_session_messages
 from utils.vector_utils import index_document_to_vector_store, delete_doc_from_vector_store
 from utils.langchain_utils import context_chain
+from utils.streaming_utils import (
+    chunk_to_text,
+    extract_ai_answer_from_output,
+    sse_event,
+    thinking_payload_from_event,
+)
 from graph.agent import agent
 
 app = FastAPI()
@@ -52,7 +60,8 @@ def chat(query_input: QueryInput):
 
         messages = append_to_history(messages, HumanMessage(content=standalone_query))
         result = agent.invoke({
-            "messages": messages
+            "messages": messages,
+            "model_name": query_input.model_name.value,
         })
 
         last_message = next((message for message in reversed(result['messages']) if isinstance(message, AIMessage)), None)
@@ -69,6 +78,124 @@ def chat(query_input: QueryInput):
     except Exception as e:
         logging.error(f"Error while generating response - {e}")
         raise HTTPException(500, f"Error while generating response - {str(e)}")
+
+@app.post("/chat/stream")
+async def chat_stream(query_input: QueryInput):
+    session_id = get_or_create_session_id(query_input.session_id)
+    logging.info(
+        f"Session ID - {session_id} | User query - {query_input.question} | Model name - {query_input.model_name.value}"
+    )
+
+    try:
+        chat_history = get_chat_history(session_id)
+        messages = history_to_messages(chat_history)
+
+        standalone_query = context_chain.invoke({
+            "chat_history": messages,
+            "input_query": query_input.question
+        })
+
+        messages = append_to_history(messages, HumanMessage(content=standalone_query))
+    except Exception as e:
+        logging.error(f"Failed to prepare chat stream - {e}")
+        raise HTTPException(500, f"Error while preparing response stream - {str(e)}")
+
+    async def event_stream():
+        answer_chunks: list[str] = []
+        non_streamed_answer: str = ""
+        try:
+            # Send session metadata early so clients can recover if the stream drops mid-response.
+            yield sse_event({
+                "type": "start",
+                "session_id": session_id,
+                "model_name": query_input.model_name.value,
+            })
+
+            stream_iter = agent.astream_events(
+                {
+                    "messages": messages,
+                    "model_name": query_input.model_name.value,
+                },
+                version="v2",
+            ).__aiter__()
+
+            next_event_task: asyncio.Task | None = None
+            while True:
+                if next_event_task is None:
+                    next_event_task = asyncio.create_task(stream_iter.__anext__())
+
+                done, _ = await asyncio.wait({next_event_task}, timeout=12.0)
+                if not done:
+                    # Heartbeat helps prevent intermediary proxy idle timeouts.
+                    yield sse_event({"type": "ping"})
+                    continue
+
+                try:
+                    event = next_event_task.result()
+                except StopAsyncIteration:
+                    next_event_task = None
+                    break
+                finally:
+                    next_event_task = None
+
+                thinking_payload = thinking_payload_from_event(event)
+                if thinking_payload:
+                    yield sse_event(thinking_payload)
+
+                if event.get("event") == "on_chain_end":
+                    chain_end_answer = extract_ai_answer_from_output((event.get("data") or {}).get("output"))
+                    if chain_end_answer:
+                        non_streamed_answer = chain_end_answer
+
+                event_type = event.get("event")
+                if event_type != "on_chat_model_stream":
+                    continue
+
+                metadata = event.get("metadata") or {}
+                if metadata.get("langgraph_node") != "answer":
+                    continue
+
+                chunk = ((event.get("data") or {}).get("chunk"))
+                token_text = chunk_to_text(chunk)
+                if not token_text:
+                    continue
+
+                answer_chunks.append(token_text)
+                yield sse_event({"type": "token", "content": token_text})
+
+            final_answer = "".join(answer_chunks).strip()
+            if not final_answer:
+                final_answer = non_streamed_answer.strip()
+            if not final_answer:
+                final_answer = "I apologise but I couldn't generate a response this time."
+            if not answer_chunks and final_answer:
+                yield sse_event({"type": "token", "content": final_answer})
+
+            yield sse_event({
+                "type": "done",
+                "session_id": session_id,
+                "model_name": query_input.model_name.value,
+            })
+            
+            try:
+                insert_chat_history(session_id, query_input.question, final_answer, query_input.model_name)
+                logging.info(f"Session ID - {session_id} | AI Response - {final_answer}")
+            except Exception as persist_error:
+                logging.error(f"Failed to persist chat history for session {session_id} - {persist_error}")
+
+        except Exception as e:
+            logging.error(f"Error while streaming response - {e}")
+            yield sse_event({"type": "error", "message": f"Error while generating response - {str(e)}"})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
     
 @app.post("/upload-doc")
 def upload_and_index_document(file: UploadFile = File(...)):
@@ -124,4 +251,3 @@ def delete_uploaded_document(request: DeleteFileRequest):
             return {"message": f"Deleted document with file_id - {request.file_id} from chroma but failed to delete from db."}
     else:
         return {"message": f"Failed to delete document with file_id - {request.file_id}"}
-

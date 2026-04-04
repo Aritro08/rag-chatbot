@@ -11,12 +11,12 @@ services:
   ui:
     build:
       context: .
-      dockerfile: Dockerfile.streamlit
+      dockerfile: Dockerfile.next
     env_file:
       - .env
     environment:
-      API_BASE_URL: http://api:8000
+      FASTAPI_BASE_URL: http://api:8000
     depends_on:
       - api
     ports:
-      - "8501:8501"
+      - "3000:3000"

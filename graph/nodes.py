@@ -1,7 +1,8 @@
 from typing import Literal
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
-from models.shared import AgentState, router_llm, judge_llm, answer_llm, retriever_selector_llm, RouteDecision, RagJudge, RetrieverChoice
+from langchain_openai import ChatOpenAI
+from models.shared import AgentState, router_llm, judge_llm, retriever_selector_llm, RouteDecision, RagJudge, RetrieverChoice
 from graph.tools import web_search_tool, get_hybrid_retriever, get_vector_retriever
 
 def retriever_selector_node(state: AgentState) -> AgentState:
@@ -44,7 +45,8 @@ def router_node(state: AgentState) -> AgentState:
     messages = [SystemMessage(content=system_prompt)] + state['messages']
     result: RouteDecision = router_llm.invoke(messages)
 
-    out = {'messages': state['messages'], 'route': result.route}
+    # Preserve all existing state fields (including model_name) across routing.
+    out = {**state, 'messages': state['messages'], 'route': result.route}
     if result.route == "end":
         out['messages'] = state['messages'] + [AIMessage(content=result.reply or "Hello!")]
 
@@ -118,11 +120,12 @@ def answer_node(state: AgentState) -> AgentState:
     """
 
     messages = state['messages'] + [HumanMessage(content=prompt)]
-    answer = answer_llm.invoke(messages).content
+    model_name = state.get("model_name") or "gpt-4o-mini"
+    llm = ChatOpenAI(model=model_name, temperature=0.5)
+    answer = llm.invoke(messages).content
 
     return {
         **state,
         "messages": state['messages'] + [AIMessage(content=answer)]
     }
-
 

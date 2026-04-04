@@ -23,3 +23,9 @@ wheels/
 .ruff_cache/
 .coverage
 htmlcov/
+.vscode/
+
+# Node / Next.js frontend
+frontend/node_modules/
+frontend/.next/
+frontend/coverage/

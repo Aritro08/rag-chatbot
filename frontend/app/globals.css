@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --background: 222 35% 9%;
+  --foreground: 210 40% 96%;
+  --card: 222 30% 12%;
+  --card-foreground: 210 40% 96%;
+  --primary: 213 94% 68%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 222 25% 18%;
+  --secondary-foreground: 210 40% 96%;
+  --muted: 222 25% 16%;
+  --muted-foreground: 215 20% 70%;
+  --accent: 191 91% 36%;
+  --accent-foreground: 210 40% 96%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 222 23% 28%;
+  --input: 222 23% 28%;
+  --ring: 213 94% 68%;
+  --radius: 0.85rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.2), transparent 42%),
+    radial-gradient(circle at 0% 100%, rgba(37, 99, 235, 0.14), transparent 34%);
+}
+
+.markdown-content {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.markdown-content > * + * {
+  margin-top: 0.7rem;
+}
+
+.markdown-content p {
+  margin: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.15rem;
+}
+
+.markdown-content ul {
+  list-style: disc;
+}
+
+.markdown-content ol {
+  list-style: decimal;
+}
+
+.markdown-content li > * + * {
+  margin-top: 0.35rem;
+}
+
+.markdown-content blockquote {
+  border-left: 2px solid hsl(var(--border));
+  margin: 0;
+  padding-left: 0.8rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid hsl(var(--border));
+  margin: 0.9rem 0;
+}
