@@ -1,6 +1,5 @@
 import os
 import tempfile
-import json
 import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -15,6 +14,12 @@ from utils.utils import get_or_create_session_id, history_to_messages, append_to
 from utils.db_utils import get_chat_history, insert_chat_history, get_all_documents, insert_document_record, delete_document, create_chat_history, create_documents_store, get_all_sessions, get_session_messages
 from utils.vector_utils import index_document_to_vector_store, delete_doc_from_vector_store
 from utils.langchain_utils import context_chain
+from utils.streaming_utils import (
+    chunk_to_text,
+    extract_ai_answer_from_output,
+    sse_event,
+    thinking_payload_from_event,
+)
 from graph.agent import agent
 
 app = FastAPI()
@@ -74,177 +79,6 @@ def chat(query_input: QueryInput):
         logging.error(f"Error while generating response - {e}")
         raise HTTPException(500, f"Error while generating response - {str(e)}")
 
-
-def _chunk_to_text(chunk) -> str:
-    """Extract textual content from a LangChain message chunk payload."""
-    content = getattr(chunk, "content", "")
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-            elif isinstance(item, dict):
-                text = item.get("text")
-                if text:
-                    parts.append(text)
-        return "".join(parts)
-    return ""
-
-
-def _sse_event(payload: dict) -> str:
-    return f"data: {json.dumps(payload)}\n\n"
-
-
-NODE_TITLES = {
-    "router": "Route Query",
-    "retriever_selector": "Pick Retrieval Strategy",
-    "rag": "Retrieve Context",
-    "web": "Run Web Search",
-    "answer": "Compose Final Answer",
-}
-
-NODE_START_DETAILS = {
-    "router": "Deciding whether to answer directly or gather context.",
-    "retriever_selector": "Choosing between hybrid and vector retrieval.",
-    "rag": "Searching indexed documents for relevant evidence.",
-    "web": "Looking up additional information on the web.",
-    "answer": "Preparing the final response.",
-}
-
-
-def _preview_text(value, max_len: int = 180) -> str:
-    if value is None:
-        return ""
-
-    if isinstance(value, (str, int, float, bool)):
-        text = str(value)
-    else:
-        try:
-            text = json.dumps(value, default=str)
-        except Exception:
-            text = str(value)
-
-    normalized = " ".join(text.split())
-    if len(normalized) <= max_len:
-        return normalized
-    return normalized[: max_len - 1] + "…"
-
-
-def _node_end_detail(node: str, output) -> str:
-    output_dict = output if isinstance(output, dict) else {}
-    route = output_dict.get("route")
-
-    if node == "router":
-        if route == "rag":
-            return "Route selected: use RAG context."
-        if route == "answer":
-            return "Route selected: answer directly."
-        if route == "end":
-            return "Route selected: end with a short conversational reply."
-        return "Routing completed."
-
-    if node == "retriever_selector":
-        mode = output_dict.get("retriever_mode")
-        if mode in {"hybrid", "vector"}:
-            return f"Retriever selected: {mode}."
-        return "Retriever strategy selected."
-
-    if node == "rag":
-        if route == "answer":
-            return "Retrieved context is sufficient to answer."
-        if route == "web":
-            return "Context is insufficient; switching to web search."
-        return "Retrieval completed."
-
-    if node == "web":
-        web_preview = _preview_text(output_dict.get("web"), 140)
-        if web_preview:
-            return f"Web results ready: {web_preview}"
-        return "Web search completed."
-
-    if node == "answer":
-        return "Answer generation finished."
-
-    return ""
-
-
-def _thinking_payload_from_event(event: dict) -> dict | None:
-    event_type = event.get("event")
-    metadata = event.get("metadata") or {}
-    data = event.get("data") or {}
-    node = metadata.get("langgraph_node")
-
-    if event_type == "on_chain_start" and node in NODE_TITLES:
-        return {
-            "type": "thinking",
-            "key": f"node:{node}",
-            "kind": "node",
-            "status": "running",
-            "title": NODE_TITLES[node],
-            "detail": NODE_START_DETAILS.get(node, "Running step..."),
-        }
-
-    if event_type == "on_chain_end" and node in NODE_TITLES:
-        return {
-            "type": "thinking",
-            "key": f"node:{node}",
-            "kind": "node",
-            "status": "done",
-            "title": NODE_TITLES[node],
-            "detail": _node_end_detail(node, data.get("output")),
-        }
-
-    if event_type == "on_tool_start":
-        tool_name = str(event.get("name") or "Tool").strip() or "Tool"
-        run_id = str(event.get("run_id") or tool_name)
-        input_preview = _preview_text(data.get("input"))
-        return {
-            "type": "thinking",
-            "key": f"tool:{run_id}",
-            "kind": "tool",
-            "status": "running",
-            "title": f"Tool Call: {tool_name}",
-            "detail": f"Input: {input_preview}" if input_preview else "Running tool call...",
-        }
-
-    if event_type == "on_tool_end":
-        tool_name = str(event.get("name") or "Tool").strip() or "Tool"
-        run_id = str(event.get("run_id") or tool_name)
-        output_preview = _preview_text(data.get("output"))
-        return {
-            "type": "thinking",
-            "key": f"tool:{run_id}",
-            "kind": "tool",
-            "status": "done",
-            "title": f"Tool Call: {tool_name}",
-            "detail": f"Output: {output_preview}" if output_preview else "Tool call finished.",
-        }
-
-    if event_type == "on_chat_model_start" and node == "answer":
-        return {
-            "type": "thinking",
-            "key": "phase:answer_generation",
-            "kind": "system",
-            "status": "running",
-            "title": "Draft Final Response",
-            "detail": "Synthesizing the final answer.",
-        }
-
-    if event_type == "on_chat_model_end" and node == "answer":
-        return {
-            "type": "thinking",
-            "key": "phase:answer_generation",
-            "kind": "system",
-            "status": "done",
-            "title": "Draft Final Response",
-            "detail": "Final answer draft is ready to stream.",
-        }
-
-    return None
-
-
 @app.post("/chat/stream")
 async def chat_stream(query_input: QueryInput):
     session_id = get_or_create_session_id(query_input.session_id)
@@ -268,9 +102,10 @@ async def chat_stream(query_input: QueryInput):
 
     async def event_stream():
         answer_chunks: list[str] = []
+        non_streamed_answer: str = ""
         try:
             # Send session metadata early so clients can recover if the stream drops mid-response.
-            yield _sse_event({
+            yield sse_event({
                 "type": "start",
                 "session_id": session_id,
                 "model_name": query_input.model_name.value,
@@ -292,7 +127,7 @@ async def chat_stream(query_input: QueryInput):
                 done, _ = await asyncio.wait({next_event_task}, timeout=12.0)
                 if not done:
                     # Heartbeat helps prevent intermediary proxy idle timeouts.
-                    yield _sse_event({"type": "ping"})
+                    yield sse_event({"type": "ping"})
                     continue
 
                 try:
@@ -303,9 +138,14 @@ async def chat_stream(query_input: QueryInput):
                 finally:
                     next_event_task = None
 
-                thinking_payload = _thinking_payload_from_event(event)
+                thinking_payload = thinking_payload_from_event(event)
                 if thinking_payload:
-                    yield _sse_event(thinking_payload)
+                    yield sse_event(thinking_payload)
+
+                if event.get("event") == "on_chain_end":
+                    chain_end_answer = extract_ai_answer_from_output((event.get("data") or {}).get("output"))
+                    if chain_end_answer:
+                        non_streamed_answer = chain_end_answer
 
                 event_type = event.get("event")
                 if event_type != "on_chat_model_stream":
@@ -316,24 +156,22 @@ async def chat_stream(query_input: QueryInput):
                     continue
 
                 chunk = ((event.get("data") or {}).get("chunk"))
-                token_text = _chunk_to_text(chunk)
+                token_text = chunk_to_text(chunk)
                 if not token_text:
                     continue
 
                 answer_chunks.append(token_text)
-                yield _sse_event({"type": "token", "content": token_text})
+                yield sse_event({"type": "token", "content": token_text})
 
             final_answer = "".join(answer_chunks).strip()
             if not final_answer:
-                result = await agent.ainvoke({
-                    "messages": messages,
-                    "model_name": query_input.model_name.value,
-                })
-                last_message = next((message for message in reversed(result["messages"]) if isinstance(message, AIMessage)), None)
-                final_answer = last_message.content if last_message else "I apologise but I couldn't generate a response this time."
-                yield _sse_event({"type": "token", "content": final_answer})
+                final_answer = non_streamed_answer.strip()
+            if not final_answer:
+                final_answer = "I apologise but I couldn't generate a response this time."
+            if not answer_chunks and final_answer:
+                yield sse_event({"type": "token", "content": final_answer})
 
-            yield _sse_event({
+            yield sse_event({
                 "type": "done",
                 "session_id": session_id,
                 "model_name": query_input.model_name.value,
@@ -347,7 +185,7 @@ async def chat_stream(query_input: QueryInput):
 
         except Exception as e:
             logging.error(f"Error while streaming response - {e}")
-            yield _sse_event({"type": "error", "message": f"Error while generating response - {str(e)}"})
+            yield sse_event({"type": "error", "message": f"Error while generating response - {str(e)}"})
 
     return StreamingResponse(
         event_stream(),

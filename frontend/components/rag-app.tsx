@@ -12,7 +12,13 @@ import {
   uploadDocument,
 } from "@/lib/api-client";
 import { parseSseStream } from "@/lib/sse";
-import type { ModelName, ThinkingStreamEvent, UiChatMessage, UiThinkingStep } from "@/lib/types";
+import {
+  DEFAULT_MODEL_NAME,
+  type ModelName,
+  type ThinkingStreamEvent,
+  type UiChatMessage,
+  type UiThinkingStep,
+} from "@/lib/types";
 import { createMessageId, cn } from "@/lib/utils";
 import { ChatPanel } from "@/components/chat-panel";
 import { DocsPanel } from "@/components/docs-panel";
@@ -67,7 +73,7 @@ export function RagApp() {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<UiChatMessage[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [modelName, setModelName] = useState<ModelName>("gpt-4o-mini");
+  const [modelName, setModelName] = useState<ModelName>(DEFAULT_MODEL_NAME);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<number | null>(null);

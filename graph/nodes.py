@@ -45,7 +45,8 @@ def router_node(state: AgentState) -> AgentState:
     messages = [SystemMessage(content=system_prompt)] + state['messages']
     result: RouteDecision = router_llm.invoke(messages)
 
-    out = {'messages': state['messages'], 'route': result.route}
+    # Preserve all existing state fields (including model_name) across routing.
+    out = {**state, 'messages': state['messages'], 'route': result.route}
     if result.route == "end":
         out['messages'] = state['messages'] + [AIMessage(content=result.reply or "Hello!")]
 
@@ -127,5 +128,4 @@ def answer_node(state: AgentState) -> AgentState:
         **state,
         "messages": state['messages'] + [AIMessage(content=answer)]
     }
-
 

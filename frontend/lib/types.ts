@@ -1,4 +1,15 @@
-export type ModelName = "gpt-4o-mini" | "gpt-4o";
+export const MODEL_OPTIONS = [
+  { value: "gpt-5-nano", label: "gpt-5-nano" },
+  { value: "gpt-5-mini", label: "gpt-5-mini" },
+  { value: "gpt-4.1-nano", label: "gpt-4.1-nano" },
+  { value: "gpt-4.1-mini", label: "gpt-4.1-mini" },
+  { value: "gpt-4o-mini", label: "gpt-4o-mini" },
+  { value: "gpt-4o", label: "gpt-4o" },
+] as const;
+
+export type ModelName = (typeof MODEL_OPTIONS)[number]["value"];
+
+export const DEFAULT_MODEL_NAME: ModelName = "gpt-4o-mini";
 
 export interface QueryInput {
   question: string;

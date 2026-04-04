@@ -3,6 +3,10 @@ from enum import Enum
 from datetime import datetime
 
 class ModelName(str, Enum):
+    GPT5_NANO = "gpt-5-nano"
+    GPT5_MINI = "gpt-5-mini"
+    GPT4_1_NANO = "gpt-4.1-nano"
+    GPT4_1_MINI = "gpt-4.1-mini"
     GPT4_O = "gpt-4o"
     GPT4_O_MINI = "gpt-4o-mini"
 
@@ -23,7 +27,6 @@ class DocumentInfo(BaseModel):
 
 class DeleteFileRequest(BaseModel):
     file_id: int
-
 
 
 

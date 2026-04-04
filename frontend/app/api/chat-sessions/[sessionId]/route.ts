@@ -1,12 +1,11 @@
 import { proxyErrorResponse, proxyGet } from "@/lib/proxy";
 
-interface RouteContext {
-  params: Promise<{ sessionId: string }>;
-}
-
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ sessionId: string }> },
+) {
   try {
-    const { sessionId } = await context.params;
+    const { sessionId } = await params;
     return await proxyGet(`/chat-sessions/${encodeURIComponent(sessionId)}`);
   } catch (error) {
     return proxyErrorResponse(error);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { ModelName, UiChatMessage } from "@/lib/types";
+import { MODEL_OPTIONS, type ModelName, type UiChatMessage } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -114,8 +114,11 @@ export function ChatPanel({
             disabled={isStreaming || isLoadingSession}
             className="h-12 rounded-xl"
           >
-            <option value="gpt-4o-mini">gpt-4o-mini</option>
-            <option value="gpt-4o">gpt-4o</option>
+            {MODEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </Select>
           <Button
             type="submit"
