@@ -23,10 +23,10 @@ export function HistoryPanel({
   onSelectSession,
 }: HistoryPanelProps) {
   return (
-    <Card className="flex h-[80vh] min-h-[24rem] flex-col">
-      <CardHeader className="space-y-3 border-b">
+    <Card className="flex h-[80vh] min-h-[24rem] flex-col border-0 bg-card/50 shadow-md rounded-lg">
+      <CardHeader className="space-y-3">
         <CardTitle className="text-base">Chat History</CardTitle>
-        <Button onClick={onNewChat} variant="secondary" className="w-full gap-2" disabled={isBusy}>
+        <Button onClick={onNewChat} variant="secondary" className="w-full gap-2 rounded-xl" disabled={isBusy}>
           <MessageSquarePlus className="h-4 w-4" />
           New Chat
         </Button>
@@ -50,10 +50,10 @@ export function HistoryPanel({
                     disabled={isBusy || isActive}
                     onClick={() => onSelectSession(session.session_id)}
                     className={[
-                      "w-full rounded-lg border px-3 py-2 text-left text-sm transition",
+                      "w-full rounded-lg px-3 py-2 text-left text-sm transition",
                       isActive
-                        ? "border-sky-500/60 bg-sky-500/10"
-                        : "border-transparent bg-muted/35 hover:border-border hover:bg-muted/60",
+                        ? "bg-primary/15 text-foreground"
+                        : "bg-transparent hover:bg-muted/50",
                     ].join(" ")}
                   >
                     <p className="line-clamp-2 font-medium">{label}</p>

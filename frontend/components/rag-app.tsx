@@ -15,6 +15,8 @@ import { parseSseStream } from "@/lib/sse";
 import {
   DEFAULT_MODEL_NAME,
   type ModelName,
+  type ThinkingKind,
+  type ThinkingStatus,
   type ThinkingStreamEvent,
   type UiChatMessage,
   type UiThinkingStep,
@@ -29,10 +31,22 @@ import { toast } from "sonner";
 
 type MobilePanel = "history" | "docs" | null;
 
-function toUiMessages(messages: Array<{ role: "user" | "assistant"; content: string }>): UiChatMessage[] {
+function toUiMessages(messages: Array<{ role: "user" | "assistant"; content: string; thinking_steps?: Array<{ key: string; kind: ThinkingKind; status: ThinkingStatus; title: string; detail?: string }> }>): UiChatMessage[] {
   return messages.map((message) => ({
     ...message,
     id: createMessageId(message.role),
+    thinking_steps: message.thinking_steps
+      ? message.thinking_steps.map((step) => ({
+          id: createMessageId("think"),
+          key: step.key,
+          kind: step.kind,
+          status: step.status,
+          title: step.title,
+          detail: step.detail,
+        }))
+      : undefined,
+    show_thinking: message.thinking_steps && message.thinking_steps.length > 0 ? true : undefined,
+    thinking_expanded: false,
   }));
 }
 
@@ -162,7 +176,7 @@ export function RagApp() {
         content: "",
         thinking_steps: [],
         thinking_expanded: true,
-        show_thinking: false,
+        show_thinking: true,
       },
     ]);
 
@@ -212,9 +226,12 @@ export function RagApp() {
         }
 
         if (event.type === "ping") {
-          if (lastTokenAt && Date.now() - lastTokenAt > 20_000) {
+          // Only consider stalled if we have received at least one token
+          // AND no token has arrived in the last 25 seconds
+          if (lastTokenAt && Date.now() - lastTokenAt > 25_000) {
             stalledAfterPartial = true;
-            break;
+            // Don't break immediately - continue processing in case
+            // done event arrives shortly after
           }
           continue;
         }
@@ -242,6 +259,7 @@ export function RagApp() {
 
         if (event.type === "done") {
           streamDone = true;
+          stalledAfterPartial = false; // Cancel stall status since we got done
           recoverySessionId = event.session_id;
           setActiveSessionId(event.session_id);
           queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
@@ -264,6 +282,16 @@ export function RagApp() {
       }
 
       if (!streamDone) {
+        // Give a short grace period for any in-flight events to arrive
+        // before triggering recovery
+        if (stalledAfterPartial) {
+          await sleep(500);
+        }
+
+        // If we have a substantial partial response (more than 50 chars),
+        // prioritize showing that rather than triggering recovery
+        const hasSubstantialResponse = aggregatedResponse.trim().length > 50;
+
         try {
           if (!recoverySessionId) {
             const latestSessions = await listChatSessions();
@@ -279,16 +307,26 @@ export function RagApp() {
 
           if (recoverySessionId) {
             let recovered = false;
-            for (let attempt = 0; attempt < 5; attempt += 1) {
+            // Increase retry attempts and delay for better recovery chances
+            for (let attempt = 0; attempt < 8; attempt += 1) {
               const recoveredMessages = await getChatSessionMessages(recoverySessionId);
               if (recoveredMessages.length > 0) {
-                setMessages(toUiMessages(recoveredMessages));
-                setActiveSessionId(recoverySessionId);
-                queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
-                recovered = true;
+                const lastMessage = recoveredMessages[recoveredMessages.length - 1];
+                // Only use recovered message if it's actually complete
+                // or if we don't have a substantial partial response
+                if (!hasSubstantialResponse ||
+                    (lastMessage.role === "assistant" && lastMessage.content.trim().length > aggregatedResponse.trim().length)) {
+                  setMessages(toUiMessages(recoveredMessages));
+                  setActiveSessionId(recoverySessionId);
+                  queryClient.invalidateQueries({ queryKey: ["chat-sessions"] });
+                  recovered = true;
+                  if (stalledAfterPartial) {
+                    toast.message("Recovered from a stalled stream and synced the final response.");
+                  }
+                }
                 break;
               }
-              await sleep(350);
+              await sleep(500);
             }
 
             if (!recovered && !aggregatedResponse.trim()) {
@@ -299,10 +337,6 @@ export function RagApp() {
                     : message,
                 ),
               );
-            }
-
-            if (recovered && stalledAfterPartial) {
-              toast.message("Recovered from a stalled stream and synced the final response.");
             }
           }
         } catch {
@@ -343,7 +377,7 @@ export function RagApp() {
     <div className="fixed inset-0 z-50 lg:hidden">
       <button
         type="button"
-        className="absolute inset-0 bg-black/35 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/50 backdrop-blur-[1px]"
         onClick={() => setMobilePanel(null)}
         aria-label="Close panel"
       />

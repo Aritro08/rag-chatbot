@@ -41,7 +41,7 @@ export function ThinkingTrace({ steps, expanded, onToggle }: ThinkingTraceProps)
   const runningCount = steps.filter((step) => step.status === "running").length;
 
   return (
-    <section className="rounded-xl border border-border/90 bg-card/60">
+    <section className="rounded-lg bg-muted/30">
       <button
         type="button"
         onClick={onToggle}
@@ -58,24 +58,36 @@ export function ThinkingTrace({ steps, expanded, onToggle }: ThinkingTraceProps)
       </button>
 
       {expanded ? (
-        <div className="max-h-52 space-y-2 overflow-y-auto border-t border-border/90 px-3 py-3">
-          {steps.map((step) => (
-            <div
-              key={step.id}
-              className={cn(
-                "rounded-lg border px-3 py-2",
-                step.status === "running" ? "border-sky-500/40 bg-sky-500/8" : "border-border/80 bg-muted/30",
-              )}
-            >
-              <div className="flex items-start gap-2">
+        <div className="max-h-52 overflow-y-auto border-t border-border/50 py-2">
+          {steps.map((step, index) => {
+            // Filter out technical details from the detail field
+            const isTechnicalDetail = step.detail && (
+              step.detail.startsWith("Input:") ||
+              step.detail.startsWith("Output:") ||
+              step.detail.startsWith("Route selected:") ||
+              step.detail.startsWith("Web results ready:")
+            );
+            const showDetail = step.detail && !isTechnicalDetail;
+
+            return (
+              <div
+                key={step.id}
+                className={cn(
+                  "flex items-start gap-2 px-3 py-1.5",
+                  step.status === "running" ? "bg-sky-500/5" : "",
+                  index !== steps.length - 1 && "border-b border-border/30"
+                )}
+              >
                 <StepIcon step={step} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium leading-snug">{step.title}</p>
-                  {step.detail ? <p className="mt-1 text-xs text-muted-foreground">{step.detail}</p> : null}
+                  <p className="text-sm leading-snug">{step.title}</p>
+                  {showDetail ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{step.detail}</p>
+                  ) : null}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </section>
