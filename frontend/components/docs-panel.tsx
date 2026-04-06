@@ -35,8 +35,8 @@ export function DocsPanel({
   };
 
   return (
-    <Card className="flex h-[80vh] min-h-[24rem] flex-col">
-      <CardHeader className="space-y-3 border-b">
+    <Card className="flex h-[80vh] min-h-[24rem] flex-col border-0 bg-card/50 shadow-md rounded-lg">
+      <CardHeader className="space-y-3">
         <CardTitle className="text-base">Documents</CardTitle>
         <input
           ref={fileInputRef}
@@ -47,7 +47,7 @@ export function DocsPanel({
         />
         <Button
           variant="secondary"
-          className="w-full gap-2"
+          className="w-full gap-2 rounded-xl"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
         >
@@ -65,7 +65,7 @@ export function DocsPanel({
         ) : docs.length ? (
           <ul className="space-y-1">
             {docs.map((doc) => (
-              <li key={doc.id} className="rounded-lg border bg-muted/20 p-3 text-sm">
+              <li key={doc.id} className="rounded-lg bg-muted/20 p-3 text-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{doc.file_name}</p>

@@ -42,6 +42,7 @@ export interface ChatSessionSummary {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  thinking_steps?: UiThinkingStep[];
 }
 
 export interface UiChatMessage extends ChatMessage {

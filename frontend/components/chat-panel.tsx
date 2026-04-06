@@ -46,9 +46,9 @@ export function ChatPanel({
   };
 
   return (
-    <Card className="flex h-[80vh] min-h-[24rem] flex-col">
+    <Card className="flex h-[80vh] min-h-[24rem] flex-col border-0 bg-card/50 shadow-md rounded-lg">
       <CardContent className="flex h-full min-h-0 flex-1 flex-col gap-4 p-4">
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-background/70 p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg bg-muted/20 p-3">
           {isLoadingSession ? (
             <div className="space-y-3">
               <Skeleton className="h-14 w-2/3" />
@@ -63,10 +63,10 @@ export function ChatPanel({
                   <div
                     key={message.id}
                     className={[
-                      "max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed animate-fade-in",
+                      "rounded-2xl px-4 py-3 text-sm leading-relaxed animate-fade-in",
                       isUser
-                        ? "ml-auto bg-primary text-primary-foreground"
-                        : "border bg-muted/35 text-foreground",
+                        ? "ml-auto w-fit max-w-[90%] bg-primary/90 text-primary-foreground"
+                        : "max-w-[90%] bg-muted/40 text-foreground",
                     ].join(" ")}
                   >
                     {isUser ? (

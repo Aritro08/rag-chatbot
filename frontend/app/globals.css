@@ -4,24 +4,25 @@
 
 :root {
   color-scheme: dark;
-  --background: 222 35% 9%;
-  --foreground: 210 40% 96%;
-  --card: 222 30% 12%;
-  --card-foreground: 210 40% 96%;
-  --primary: 213 94% 68%;
-  --primary-foreground: 222 47% 11%;
-  --secondary: 222 25% 18%;
-  --secondary-foreground: 210 40% 96%;
-  --muted: 222 25% 16%;
-  --muted-foreground: 215 20% 70%;
-  --accent: 191 91% 36%;
-  --accent-foreground: 210 40% 96%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 222 23% 28%;
-  --input: 222 23% 28%;
-  --ring: 213 94% 68%;
-  --radius: 0.85rem;
+  /* Modern dark theme with subtle warmth */
+  --background: 240 10% 6%;
+  --foreground: 240 5% 92%;
+  --card: 240 8% 10%;
+  --card-foreground: 240 5% 92%;
+  --primary: 220 90% 66%;
+  --primary-foreground: 240 10% 6%;
+  --secondary: 240 6% 16%;
+  --secondary-foreground: 240 5% 92%;
+  --muted: 240 6% 14%;
+  --muted-foreground: 240 5% 57%;
+  --accent: 200 80% 50%;
+  --accent-foreground: 240 10% 6%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 240 5% 98%;
+  --border: 240 6% 20%;
+  --input: 240 6% 20%;
+  --ring: 220 90% 66%;
+  --radius: 0.75rem;
 }
 
 * {
@@ -31,9 +32,10 @@
 body {
   @apply bg-background text-foreground antialiased;
   min-height: 100vh;
+  /* Subtle gradient for depth without being overwhelming */
   background-image:
-    radial-gradient(circle at 100% 0%, rgba(14, 165, 233, 0.2), transparent 42%),
-    radial-gradient(circle at 0% 100%, rgba(37, 99, 235, 0.14), transparent 34%);
+    radial-gradient(ellipse at top, rgba(120, 119, 198, 0.08), transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(74, 222, 128, 0.05), transparent 50%);
 }
 
 .markdown-content {
