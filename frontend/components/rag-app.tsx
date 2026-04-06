@@ -166,6 +166,8 @@ export function RagApp() {
     let thinkingAutoCollapsed = false;
     let lastTokenAt = 0;
     let stalledAfterPartial = false;
+    const streamStartTime = Date.now();
+    const MAX_STREAM_DURATION = 90_000; // 90 seconds maximum
 
     setMessages((previous) => [
       ...previous,
@@ -233,6 +235,13 @@ export function RagApp() {
             // Don't break immediately - continue processing in case
             // done event arrives shortly after
           }
+
+          // Safety check: force exit if stream has been running too long
+          if (Date.now() - streamStartTime > MAX_STREAM_DURATION) {
+            stalledAfterPartial = true;
+            break; // Force exit after maximum duration
+          }
+
           continue;
         }
 

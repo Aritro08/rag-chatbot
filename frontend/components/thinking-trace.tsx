@@ -34,11 +34,14 @@ function StepIcon({ step }: { step: UiThinkingStep }) {
 }
 
 export function ThinkingTrace({ steps, expanded, onToggle }: ThinkingTraceProps) {
-  if (!steps.length) {
+  // Filter out tool steps - users don't need to see technical tool details
+  const filteredSteps = steps.filter((step) => step.kind !== "tool");
+
+  if (!filteredSteps.length) {
     return null;
   }
 
-  const runningCount = steps.filter((step) => step.status === "running").length;
+  const runningCount = filteredSteps.filter((step) => step.status === "running").length;
 
   return (
     <section className="rounded-lg bg-muted/30">
@@ -51,7 +54,7 @@ export function ThinkingTrace({ steps, expanded, onToggle }: ThinkingTraceProps)
           <Sparkles className="h-4 w-4 text-sky-300" />
           <span className="text-sm font-medium">Thinking Process</span>
           <span className="text-xs text-muted-foreground">
-            {steps.length} steps{runningCount ? ` • ${runningCount} running` : ""}
+            {filteredSteps.length} steps{runningCount ? ` • ${runningCount} running` : ""}
           </span>
         </span>
         {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -59,7 +62,7 @@ export function ThinkingTrace({ steps, expanded, onToggle }: ThinkingTraceProps)
 
       {expanded ? (
         <div className="max-h-52 overflow-y-auto border-t border-border/50 py-2">
-          {steps.map((step, index) => {
+          {filteredSteps.map((step, index) => {
             // Filter out technical details from the detail field
             const isTechnicalDetail = step.detail && (
               step.detail.startsWith("Input:") ||
@@ -75,7 +78,7 @@ export function ThinkingTrace({ steps, expanded, onToggle }: ThinkingTraceProps)
                 className={cn(
                   "flex items-start gap-2 px-3 py-1.5",
                   step.status === "running" ? "bg-sky-500/5" : "",
-                  index !== steps.length - 1 && "border-b border-border/30"
+                  index !== filteredSteps.length - 1 && "border-b border-border/30"
                 )}
               >
                 <StepIcon step={step} />

@@ -96,6 +96,15 @@ def insert_chat_history(session_id, user_query, llm_response, model):
     return message_id
 
 
+def _validate_thinking_step(step, step_index=None):
+    """Validate that a thinking step has all required keys. Raises ValueError if invalid."""
+    required_keys = ["key", "kind", "status", "title"]
+    prefix = f"Step {step_index}: " if step_index is not None else ""
+    for key in required_keys:
+        if key not in step or step[key] is None:
+            raise ValueError(f"{prefix}Missing required thinking step field: '{key}'")
+
+
 def insert_chat_history_with_thinking_steps(
     session_id, user_query, llm_response, model, thinking_steps
 ):
@@ -116,6 +125,11 @@ def insert_chat_history_with_thinking_steps(
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
 
+    # Validate required keys upfront before any DB operations
+    if thinking_steps:
+        for order, step in enumerate(thinking_steps):
+            _validate_thinking_step(step, order)
+
     with get_db_connection() as conn:
         try:
             with conn.cursor() as cur:
@@ -133,10 +147,10 @@ def insert_chat_history_with_thinking_steps(
                             THINKING_STEPS_SQL,
                             (
                                 message_id,
-                                step.get("key"),
-                                step.get("kind"),
-                                step.get("status"),
-                                step.get("title"),
+                                step["key"],
+                                step["kind"],
+                                step["status"],
+                                step["title"],
                                 step.get("detail"),
                                 order,
                             ),
@@ -251,7 +265,7 @@ def create_thinking_steps_table():
     SQL = """
         CREATE TABLE IF NOT EXISTS thinking_steps (
             id BIGSERIAL PRIMARY KEY,
-            message_id BIGINT REFERENCES chat_history(id) ON DELETE CASCADE,
+            message_id BIGINT NOT NULL REFERENCES chat_history(id) ON DELETE CASCADE,
             step_key TEXT NOT NULL,
             step_kind TEXT NOT NULL,
             step_status TEXT NOT NULL,
@@ -275,6 +289,10 @@ def insert_thinking_steps(message_id, steps):
         INSERT INTO thinking_steps (message_id, step_key, step_kind, step_status, step_title, step_detail, step_order)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
+    # Validate required keys upfront before any DB operations
+    for order, step in enumerate(steps):
+        _validate_thinking_step(step, order)
+
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             for order, step in enumerate(steps):
@@ -282,10 +300,10 @@ def insert_thinking_steps(message_id, steps):
                     SQL,
                     (
                         message_id,
-                        step.get("key"),
-                        step.get("kind"),
-                        step.get("status"),
-                        step.get("title"),
+                        step["key"],
+                        step["kind"],
+                        step["status"],
+                        step["title"],
                         step.get("detail"),
                         order,
                     ),
@@ -320,25 +338,78 @@ def get_thinking_steps(message_id):
 
 def get_session_messages_with_thinking(session_id):
     """Return full user/assistant message pairs with thinking steps for a session."""
+    # Single query using JOIN to fetch all messages and their thinking steps
     SQL = """
-        SELECT id, user_query, llm_response FROM chat_history
-        WHERE session_id = %s ORDER BY created_at, id
+        SELECT
+            ch.id,
+            ch.user_query,
+            ch.llm_response,
+            ts.step_key,
+            ts.step_kind,
+            ts.step_status,
+            ts.step_title,
+            ts.step_detail,
+            ts.step_order
+        FROM chat_history ch
+        LEFT JOIN thinking_steps ts ON ch.id = ts.message_id
+        WHERE ch.session_id = %s
+        ORDER BY ch.created_at, ch.id, ts.step_order, ts.id
     """
     messages = []
+    current_message_id = None
+    current_thinking_steps = []
+
     with get_db_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(SQL, (session_id,))
             rows = cursor.fetchall()
+
             for row in rows:
                 message_id = row["id"]
-                # Get thinking steps for this assistant message
-                thinking_steps = get_thinking_steps(message_id)
-                messages.append({"role": "user", "content": row["user_query"]})
+
+                # When we encounter a new message, finalize the previous one
+                if message_id != current_message_id:
+                    if current_message_id is not None:
+                        # Append previous assistant message with its thinking steps
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": previous_llm_response,
+                                "thinking_steps": current_thinking_steps
+                                if current_thinking_steps
+                                else None,
+                            }
+                        )
+
+                    # Start a new message pair
+                    messages.append({"role": "user", "content": row["user_query"]})
+                    current_message_id = message_id
+                    previous_llm_response = row["llm_response"]
+                    current_thinking_steps = []
+
+                # Collect thinking step if present (LEFT JOIN may return NULLs)
+                if row["step_key"] is not None:
+                    current_thinking_steps.append(
+                        {
+                            "key": row["step_key"],
+                            "kind": row["step_kind"],
+                            "status": row["step_status"],
+                            "title": row["step_title"],
+                            "detail": row["step_detail"],
+                            "order": row["step_order"],
+                        }
+                    )
+
+            # Don't forget the last message
+            if current_message_id is not None:
                 messages.append(
                     {
                         "role": "assistant",
-                        "content": row["llm_response"],
-                        "thinking_steps": thinking_steps if thinking_steps else None,
+                        "content": previous_llm_response,
+                        "thinking_steps": current_thinking_steps
+                        if current_thinking_steps
+                        else None,
                     }
                 )
+
     return messages
